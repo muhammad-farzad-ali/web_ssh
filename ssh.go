@@ -92,7 +92,6 @@ func handleSSH(conn *websocket.Conn) {
 	}
 
 	var writeMu sync.Mutex
-	done := make(chan struct{})
 
 	// SSH stdout -> WebSocket (binary).
 	go func() {
@@ -111,7 +110,7 @@ func handleSSH(conn *websocket.Conn) {
 				break
 			}
 		}
-		close(done)
+		// Session ended; close the socket so the client sees the disconnect.
 		conn.Close()
 	}()
 
@@ -137,11 +136,6 @@ func handleSSH(conn *websocket.Conn) {
 	}
 
 	stdin.Close()
-	select {
-	case <-done:
-	default:
-		close(done)
-	}
 }
 
 // dialSSH builds a client config from the request and establishes the connection.
