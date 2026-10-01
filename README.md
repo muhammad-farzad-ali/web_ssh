@@ -8,21 +8,39 @@ Browser (xterm.js)  ⇄  WebSocket  ⇄  Go backend  ⇄  SSH  ⇄  your machine
 
 ## Features
 
-- Single static binary (≈11 MB) with the frontend embedded — nothing to install on the client
+- Single static binary (≈6 MB) with the frontend embedded — nothing to install on the client
 - SSH password **or** private key (with optional passphrase) authentication
 - Live terminal with full PTY and automatic resize on window changes
 - Self-contained, offline-capable (xterm.js is vendored, no CDN)
 - Optional TLS for secure credential transport
 
+## Install
+
+Prebuilt binaries are available on the [releases page](https://github.com/muhammad-farzad-ali/web_ssh/releases):
+
+| OS      | Architectures    |
+|---------|------------------|
+| Linux   | amd64, arm64     |
+| macOS   | amd64, arm64     |
+| Windows | amd64            |
+
+Download the one for your platform, make it executable (Linux/macOS), and run it.
+
 ## Requirements
 
-- Go 1.22+ to build
+- Go 1.22+ to build (not needed if using a prebuilt binary)
 - SSH server reachable at your target host
 
 ## Build
 
 ```sh
 go build -o webssh .
+```
+
+To build a stripped static binary for another platform:
+
+```sh
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o webssh .
 ```
 
 ## Run
