@@ -73,7 +73,19 @@ func startMockSSH(t *testing.T) (addr, password string) {
 							case "shell":
 								req.Reply(true, nil)
 								ch.Write([]byte("MOCK_SHELL_READY\r\n"))
-								ch.Write([]byte("itachi@mock:~$ "))
+								// Echo stdin back so the bridge round-trip is testable.
+								go func() {
+									buf := make([]byte, 4096)
+									for {
+										n, err := ch.Read(buf)
+										if n > 0 {
+											ch.Write(buf[:n])
+										}
+										if err != nil {
+											return
+										}
+									}
+								}()
 							default:
 								req.Reply(req.WantReply, nil)
 							}
@@ -138,9 +150,21 @@ func TestEndToEnd(t *testing.T) {
 	}
 	t.Logf("shell output: %q", got)
 
-	// Send some input (e.g. a command) through the bridge.
-	if err := ws.WriteMessage(websocket.BinaryMessage, []byte("whoami\r")); err != nil {
+	// Send some input through the bridge and expect it echoed back (binary path).
+	if err := ws.WriteMessage(websocket.BinaryMessage, []byte("ping")); err != nil {
 		t.Fatalf("write stdin: %v", err)
+	}
+	_, msg, err = ws.ReadMessage()
+	if err != nil {
+		t.Fatalf("read echo: %v", err)
+	}
+	if string(msg) != "ping" {
+		t.Fatalf("expected echoed input %q, got %q", "ping", string(msg))
+	}
+
+	// A resize control message must not be forwarded to the SSH stdin.
+	if err := ws.WriteMessage(websocket.TextMessage, []byte(`{"type":"resize","cols":120,"rows":40}`)); err != nil {
+		t.Fatalf("write resize: %v", err)
 	}
 }
 

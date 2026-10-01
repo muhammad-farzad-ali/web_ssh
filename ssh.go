@@ -3,9 +3,11 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/ssh"
@@ -37,6 +39,9 @@ const (
 // SSH session with a PTY, and bridges terminal bytes in both directions.
 func handleSSH(conn *websocket.Conn) {
 	defer conn.Close()
+
+	// Bound per-message size (terminal I/O is tiny; keys are a few KB).
+	conn.SetReadLimit(4 << 20)
 
 	var req connectRequest
 	if err := conn.ReadJSON(&req); err != nil {
@@ -85,6 +90,8 @@ func handleSSH(conn *websocket.Conn) {
 		sendError(conn, "stdout: "+err.Error())
 		return
 	}
+	// Under a PTY the remote merges stderr into stdout; drain any that isn't.
+	session.Stderr = io.Discard
 
 	if err := session.Shell(); err != nil {
 		sendError(conn, "shell: "+err.Error())
@@ -115,6 +122,7 @@ func handleSSH(conn *websocket.Conn) {
 	}()
 
 	// WebSocket -> SSH stdin. Text frames are control messages (resize).
+readLoop:
 	for {
 		mt, data, err := conn.ReadMessage()
 		if err != nil {
@@ -123,7 +131,7 @@ func handleSSH(conn *websocket.Conn) {
 		switch mt {
 		case wsData:
 			if _, err := stdin.Write(data); err != nil {
-				break
+				break readLoop
 			}
 		case wsControl:
 			var r resizeRequest
@@ -166,7 +174,17 @@ func dialSSH(req *connectRequest) (*ssh.Client, error) {
 	}
 
 	addr := net.JoinHostPort(req.Host, fmt.Sprintf("%d", req.Port))
-	return ssh.Dial("tcp", addr, config)
+	d := net.Dialer{Timeout: 10 * time.Second}
+	conn, err := d.Dial("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	c, chans, reqs, err := ssh.NewClientConn(conn, addr, config)
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+	return ssh.NewClient(c, chans, reqs), nil
 }
 
 func sendError(conn *websocket.Conn, msg string) {
