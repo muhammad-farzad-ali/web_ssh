@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>web_ssh</title>
+<link rel="stylesheet" href="/xterm.css">
+<style>
+  :root { --bg: #1e1e1e; --fg: #d4d4d4; --accent: #0f6cbd; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; height: 100vh; display: flex; flex-direction: column;
+    background: var(--bg); color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  #login {
+    margin: auto; padding: 2rem; width: 380px; max-width: 92vw;
+    background: #252526; border-radius: 8px;
+  }
+  #login h1 { margin: 0 0 1rem; font-size: 1.3rem; text-align: center; }
+  #login label { display: block; margin: 0.6rem 0 0.2rem; font-size: 0.85rem; opacity: 0.8; }
+  #login input, #login textarea {
+    width: 100%; padding: 0.5rem 0.6rem; border: 1px solid #3c3c3c;
+    border-radius: 4px; background: #1e1e1e; color: var(--fg);
+    font-family: inherit;
+  }
+  #login textarea { font-family: monospace; resize: vertical; min-height: 90px; }
+  #login button {
+    width: 100%; margin-top: 1rem; padding: 0.6rem;
+    background: var(--accent); color: #fff; border: none; border-radius: 4px;
+    font-size: 1rem; cursor: pointer;
+  }
+  #login button:hover { background: #1878cf; }
+  #msg { margin-top: 0.8rem; min-height: 1.2em; text-align: center; color: #f48771; font-size: 0.85rem; }
+  .hint { font-size: 0.75rem; opacity: 0.6; margin-top: 0.3rem; }
+  #termwrap { flex: 1; min-height: 0; padding: 8px; display: none; }
+  #status { padding: 4px 12px; font-size: 0.8rem; background: #252526; border-bottom: 1px solid #3c3c3c; }
+  #status a { color: var(--accent); cursor: pointer; margin-right: 12px; }
+</style>
+</head>
+<body>
+  <div id="status" style="display:none">
+    <a id="newconn">New connection</a><span id="conninfo"></span>
+  </div>
+
+  <form id="login">
+    <h1>web_ssh</h1>
+    <label for="host">Host</label>
+    <input id="host" value="localhost" autocomplete="off">
+    <label for="port">Port</label>
+    <input id="port" value="22" inputmode="numeric">
+    <label for="user">User</label>
+    <input id="user" autocomplete="off">
+    <label for="auth">Password (or leave empty for key)</label>
+    <input id="password" type="password" autocomplete="off">
+    <label for="key">Private key (PEM)</label>
+    <textarea id="key" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
+    <label for="passphrase">Key passphrase (optional)</label>
+    <input id="passphrase" type="password" autocomplete="off">
+    <button type="submit">Connect</button>
+    <div id="msg"></div>
+    <div class="hint">Credentials are sent over this connection. Prefer HTTPS.</div>
+  </form>
+
+  <div id="termwrap"><div id="term"></div></div>
+
+  <script src="/xterm.js"></script>
+  <script src="/xterm-addon-fit.js"></script>
+  <script>
+    const term = new Terminal({ cursorBlink: true, fontSize: 14, theme: { background: '#1e1e1e' } });
+    const fit = new FitAddon.FitAddon();
+    term.loadAddon(fit);
+
+    function show(msg) { document.getElementById('msg').textContent = msg; }
+    function setStatus(s) {
+      document.getElementById('conninfo').textContent = s;
+      document.getElementById('status').style.display = s ? 'block' : 'none';
+    }
+
+    function openTerminal() {
+      document.getElementById('login').style.display = 'none';
+      document.getElementById('termwrap').style.display = 'flex';
+      term.open(document.getElementById('term'));
+      fit.fit();
+      term.focus();
+    }
+
+    function reset() {
+      term.dispose();
+      document.getElementById('login').style.display = 'block';
+      document.getElementById('termwrap').style.display = 'none';
+      setStatus('');
+      show('');
+    }
+    document.getElementById('newconn').addEventListener('click', reset);
+
+    document.getElementById('login').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const host = document.getElementById('host').value.trim();
+      const port = parseInt(document.getElementById('port').value, 10) || 22;
+      const user = document.getElementById('user').value.trim();
+      const password = document.getElementById('password').value;
+      const key = document.getElementById('key').value.trim();
+      const passphrase = document.getElementById('passphrase').value;
+      if (!host || !user) { show('Host and user are required'); return; }
+
+      show('Connecting...');
+      const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+      ws.binaryType = 'arraybuffer';
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ type: 'connect', host, port, user, password, privateKey: key || undefined, passphrase: passphrase || undefined }));
+      };
+
+      ws.onmessage = (ev) => {
+        if (typeof ev.data === 'string') return;
+        const bytes = new Uint8Array(ev.data);
+        term.write(bytes);
+      };
+
+      ws.onclose = () => { if (term.element) term.write('\r\n\x1b[90m[connection closed]\x1b[0m\r\n'); };
+
+      term.onData((data) => { if (ws.readyState === WebSocket.OPEN) ws.send(data); });
+      term.onResize(({ cols, rows }) => {
+        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'resize', cols, rows }));
+      });
+
+      ws.onerror = () => show('WebSocket error');
+      openTerminal();
+      setStatus(user + '@' + host + ':' + port);
+      show('');
+
+      window.onresize = () => { fit.fit(); };
+    });
+  </script>
+</body>
+</html>
