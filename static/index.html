@@ -8,8 +8,9 @@
 <style>
   :root { --bg: #1e1e1e; --fg: #d4d4d4; --accent: #0f6cbd; }
   * { box-sizing: border-box; }
+  html, body { height: 100%; }
   body {
-    margin: 0; height: 100vh; display: flex; flex-direction: column;
+    margin: 0; display: flex; flex-direction: column;
     background: var(--bg); color: var(--fg);
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   }
@@ -33,8 +34,8 @@
   #login button:hover { background: #1878cf; }
   #msg { margin-top: 0.8rem; min-height: 1.2em; text-align: center; color: #f48771; font-size: 0.85rem; }
   .hint { font-size: 0.75rem; opacity: 0.6; margin-top: 0.3rem; }
-  #termwrap { flex: 1; min-height: 0; display: none; }
-  #term { width: 100%; height: 100%; }
+  #termwrap { flex: 1 1 auto; min-height: 0; display: none; }
+  #term { flex: 1 1 auto; min-width: 0; min-height: 0; }
   #status { padding: 4px 12px; font-size: 0.8rem; background: #252526; border-bottom: 1px solid #3c3c3c; }
   #status a { color: var(--accent); cursor: pointer; margin-right: 12px; }
 </style>
@@ -88,6 +89,11 @@
       if (!opened) { term.open(document.getElementById('term')); opened = true; }
       term.reset();
       fit.fit();
+      // Re-fit once the renderer has measured its character cells (fonts).
+      requestAnimationFrame(() => requestAnimationFrame(() => { if (opened) fit.fit(); }));
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(() => { if (opened) fit.fit(); });
+      }
       term.focus();
     }
 
