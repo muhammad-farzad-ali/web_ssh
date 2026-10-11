@@ -49,13 +49,13 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o web
 ./webssh
 ```
 
-Listens on `:8080` by default. Open http://localhost:8080 in your browser, fill in host/port/user and your password or private key, and connect.
+Listens on `:8922` by default. Open http://localhost:8922 in your browser, fill in host/port/user and your password or private key, and connect.
 
 ### Flags
 
 | Flag         | Default   | Description                                    |
 |--------------|-----------|------------------------------------------------|
-| `-addr`      | `:8080`   | Listen address                                 |
+| `-addr`      | `:8922`   | Listen address                                 |
 | `-tls-cert`  | *(empty)* | Path to TLS certificate (enables HTTPS)        |
 | `-tls-key`   | *(empty)* | Path to TLS private key                        |
 

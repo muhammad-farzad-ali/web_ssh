@@ -22,7 +22,7 @@ var upgrader = websocket.Upgrader{
 }
 
 func main() {
-	addr := flag.String("addr", ":8080", "listen address")
+	addr := flag.String("addr", ":8922", "listen address")
 	tlsCert := flag.String("tls-cert", "", "path to TLS certificate (enables HTTPS)")
 	tlsKey := flag.String("tls-key", "", "path to TLS private key")
 	flag.Parse()
